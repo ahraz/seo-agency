@@ -5,7 +5,7 @@ from tools.qa_runner import run_shell_command
 
 
 def qa_engineer_agent(repo_path: str = "clients/gta-scrub/repo"):
-    read_ft, _, list_ft = make_file_tools(repo_path)
+    read_ft, _, list_ft, _ = make_file_tools(repo_path)
     return Agent(
         role="SEO Code Quality Engineer",
         goal=(

@@ -5,7 +5,7 @@ from tools.swarm_logger import log_activity
 
 
 def seo_developer_agent(repo_path: str = "clients/gta-scrub/repo"):
-    read_ft, write_ft, list_ft = make_file_tools(repo_path)
+    read_ft, write_ft, list_ft, delete_ft = make_file_tools(repo_path)
     return Agent(
         role="SEO Developer Engineer",
         goal=(
@@ -17,7 +17,7 @@ def seo_developer_agent(repo_path: str = "clients/gta-scrub/repo"):
             "You always read a file before editing it, and change only what is "
             "needed to fix the SEO issue."
         ),
-        tools=[read_ft, write_ft, list_ft],
+        tools=[read_ft, write_ft, list_ft, delete_ft],
         llm=get_llm(),
         verbose=True,
         step_callback=lambda step: log_activity(

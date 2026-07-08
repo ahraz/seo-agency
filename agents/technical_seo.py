@@ -5,7 +5,7 @@ from tools.file_editor import make_file_tools
 
 
 def technical_seo_agent(repo_path: str = "clients/gta-scrub/repo"):
-    read_ft, _, list_ft = make_file_tools(repo_path)
+    read_ft, _, list_ft, _ = make_file_tools(repo_path)
     return Agent(
         role="Technical SEO Engineer",
         goal=(

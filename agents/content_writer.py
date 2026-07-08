@@ -5,7 +5,7 @@ from tools.file_editor import make_file_tools
 
 
 def content_writer_agent(repo_path: str = "clients/gta-scrub/repo"):
-    _, write_ft, _ = make_file_tools(repo_path)
+    _, write_ft, _, _ = make_file_tools(repo_path)
     return Agent(
         role="SEO Content Strategist and Writer",
         goal=(

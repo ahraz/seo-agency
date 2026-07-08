@@ -40,9 +40,11 @@ def run_autonomous_loop(
         1. YOU MUST USE YOUR TOOLS. Do not just type the code in your response.
         2. FILE PATHS: The audit gives you full paths. Strip the repo prefix and use ONLY relative paths.
         3. Use 'Read File' to look at the target file.
-        4. Use 'Write File' to save the exact code fix back to the repository.
-        If you say "I fixed it" but did not successfully execute the 'Write File' tool, you will fail.""",
-        expected_output="Confirmation of the exact file changed using the Write File tool.",
+        4. Use 'Write File' to save edits, or 'Delete File' to remove files that should not exist.
+        5. If a static file (like public/sitemap.xml) conflicts with a dynamic route,
+           DELETE it rather than emptying it. Empty files break the build.
+        If you say "I fixed it" but did not successfully execute a tool, you will fail.""",
+        expected_output="Confirmation of the exact file changed using Write File or Delete File.",
         agent=dev_agent,
     )
 
@@ -73,8 +75,14 @@ def run_autonomous_loop(
     build_ok = qa_results["build"]["success"]
 
     if not (lint_ok and build_ok):
-        print("QA FAILED. The agent broke the build. Aborting commit.")
+        print("\n❌ QA FAILED — build broke after the edit. Reverting changes.\n")
+        if not lint_ok:
+            print(f"── Lint errors ──\n{qa_results['lint']['output'][-1500:]}")
+        if not build_ok:
+            print(f"── Build errors ──\n{qa_results['build']['output'][-2000:]}")
+        print("\n🔄 Running git checkout . to revert...")
         subprocess.run("git checkout .", cwd=repo_path, shell=True)
+        print("✅ Reverted. The agent's edit broke the build.")
         return
 
     print("\n4. QA PASSED - Committing and opening PR...")

@@ -33,6 +33,15 @@ def make_file_tools(repo_root: str):
             f.write(content)
         return f"Updated {path}"
 
+    @tool("Delete File")
+    def delete_file_tool(path: str) -> str:
+        """Delete a file from the repo. Path is relative to repo root. Use this when a file needs to be removed entirely."""
+        full_path = _safe_path(path)
+        if not os.path.exists(full_path):
+            return f"File already gone: {path}"
+        os.remove(full_path)
+        return f"Deleted {path}"
+
     @tool("List Files")
     def list_files_tool(directory: str = ".") -> str:
         """List files under a directory of the repo, relative to repo root."""
@@ -44,4 +53,4 @@ def make_file_tools(repo_root: str):
                 files.append(rel)
         return "\n".join(files)
 
-    return read_file_tool, write_file_tool, list_files_tool
+    return read_file_tool, write_file_tool, list_files_tool, delete_file_tool
