@@ -1,0 +1,29 @@
+seo_strategy:
+  description: "Create an SEO strategy for the client to increase organic leads."
+  expected_output: "SEO strategy document"
+  agent: seo_director
+
+keyword_research:
+  description: "Find high-value keywords in the client's location and industry."
+  expected_output: "Keyword research report"
+  agent: keyword_research
+
+competitor_analysis:
+  description: "Analyze competitor content gaps and ranking opportunities."
+  expected_output: "Competitor analysis"
+  agent: competitor_analysis
+
+schema_recommendations:
+  description: "Recommend structured data (LocalBusiness, Service) implementation."
+  expected_output: "Schema recommendations"
+  agent: schema
+
+image_audit:
+  description: "Audit all website images and generate optimized alt text for missing ones."
+  expected_output: "List of images with optimized alt text"
+  agent: image_seo
+
+internal_links:
+  description: "Map out high-value internal links between existing service pages."
+  expected_output: "Internal link map with anchor text and target URLs"
+  agent: internal_linking
