@@ -1,4 +1,6 @@
 import subprocess
+import os
+from crewai.tools import tool
 
 
 def run_command(command, cwd):
@@ -15,6 +17,29 @@ def run_command(command, cwd):
         "success": result.returncode == 0,
         "output": result.stdout + result.stderr
     }
+
+
+@tool("Run Shell Command")
+def run_shell_command(command: str, cwd: str = ".") -> str:
+    """Run a shell command inside the repo directory and return the output.
+    Use for npm build, npm run lint, git status, etc.
+    - command: the shell command to run (e.g. 'npm run build')
+    - cwd: directory to run in (relative to current working dir)
+    """
+    abs_cwd = os.path.abspath(cwd)
+    result = subprocess.run(
+        command,
+        cwd=abs_cwd,
+        shell=True,
+        capture_output=True,
+        text=True,
+        timeout=120,
+    )
+    output = result.stdout + result.stderr
+    if result.returncode == 0:
+        return f"✅ Command succeeded:\n{output[:3000]}"
+    else:
+        return f"❌ Command failed (exit {result.returncode}):\n{output[:3000]}"
 
 
 def run_nextjs_checks(repo_path):

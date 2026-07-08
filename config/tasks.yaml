@@ -1,29 +1,19 @@
-seo_strategy:
-  description: "Create an SEO strategy for the client to increase organic leads."
-  expected_output: "SEO strategy document"
-  agent: seo_director
+seo_audit:
+  description: "Audit the website for technical SEO issues."
+  expected_output: "SEO audit report with issues found."
+  agent: technical_seo
 
-keyword_research:
-  description: "Find high-value keywords in the client's location and industry."
-  expected_output: "Keyword research report"
-  agent: keyword_research
+content_research:
+  description: "Research a topic and find keyword opportunities."
+  expected_output: "Research summary with keywords and competitor gaps."
+  agent: content_writer
 
-competitor_analysis:
-  description: "Analyze competitor content gaps and ranking opportunities."
-  expected_output: "Competitor analysis"
-  agent: competitor_analysis
+seo_fix:
+  description: "Implement a specific SEO code fix in the repository."
+  expected_output: "Confirmation of the file changed and code added."
+  agent: seo_developer
 
-schema_recommendations:
-  description: "Recommend structured data (LocalBusiness, Service) implementation."
-  expected_output: "Schema recommendations"
-  agent: schema
-
-image_audit:
-  description: "Audit all website images and generate optimized alt text for missing ones."
-  expected_output: "List of images with optimized alt text"
-  agent: image_seo
-
-internal_links:
-  description: "Map out high-value internal links between existing service pages."
-  expected_output: "Internal link map with anchor text and target URLs"
-  agent: internal_linking
+qa_validation:
+  description: "Validate that code changes build correctly and follow best practices."
+  expected_output: "QA pass/fail report."
+  agent: qa_engineer

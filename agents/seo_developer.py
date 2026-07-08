@@ -1,10 +1,11 @@
 from crewai import Agent
 from tools.llm import get_llm
-from tools.file_editor import read_file_tool, write_file_tool, list_files_tool
+from tools.file_editor import make_file_tools
 from tools.swarm_logger import log_activity
 
 
-def seo_developer_agent():
+def seo_developer_agent(repo_path: str = "clients/gta-scrub/repo"):
+    read_ft, write_ft, list_ft = make_file_tools(repo_path)
     return Agent(
         role="SEO Developer Engineer",
         goal=(
@@ -16,7 +17,7 @@ def seo_developer_agent():
             "You always read a file before editing it, and change only what is "
             "needed to fix the SEO issue."
         ),
-        tools=[read_file_tool, write_file_tool, list_files_tool],
+        tools=[read_ft, write_ft, list_ft],
         llm=get_llm(),
         verbose=True,
         step_callback=lambda step: log_activity(

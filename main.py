@@ -1,19 +1,11 @@
 #!/usr/bin/env python3
 """SEO Agency — CrewAI-powered multi-agent SEO automation platform.
 
-Run a full campaign:
-    python main.py campaign
-
-Run the autonomous pipeline (audit -> fix -> PR):
-    python main.py pipeline
-
-Run a single SEO fix:
-    python main.py fix
-
-Run the LLM connection test:
+Commands:
+    python main.py campaign [name] [location]
+    python main.py fix [description]
+    python main.py blog <topic>
     python main.py test
-
-Launch the web UI:
     python main.py ui
 """
 
@@ -21,7 +13,6 @@ import subprocess
 import sys
 import os
 
-# Ensure the project root is on sys.path
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 
@@ -34,15 +25,12 @@ def main():
 
     if command == "campaign":
         from workflows.seo_campaign import run_full_campaign
-        print("Running full SEO campaign...\n")
-        result = run_full_campaign()
-        print("\n==== CAMPAIGN RESULT ====\n")
+        name = sys.argv[2] if len(sys.argv) > 2 else "Client"
+        location = sys.argv[3] if len(sys.argv) > 3 else ""
+        print(f"Running SEO campaign for {name}...\n")
+        result = run_full_campaign(client_name=name, client_location=location)
+        print("\n==== RESULT ====\n")
         print(result)
-
-    elif command == "pipeline":
-        from workflows.autonomous_pipeline import run_autonomous_loop
-        print("Running autonomous SEO pipeline...\n")
-        run_autonomous_loop()
 
     elif command == "fix":
         from workflows.pipeline import run_seo_fix
@@ -53,10 +41,17 @@ def main():
         )
         run_seo_fix(description)
 
+    elif command == "blog":
+        from workflows.write_blog import write_blog_post
+        topic = " ".join(sys.argv[2:]) if len(sys.argv) > 2 else "Benefits of professional commercial cleaning"
+        print(f"Writing blog post: {topic}\n")
+        result = write_blog_post(topic=topic)
+        print(result)
+
     elif command == "test":
         from tools.llm import get_llm
         llm = get_llm()
-        response = llm.call("Reply only with: DeepSeek connection successful")
+        response = llm.call("Reply only with: Connection successful")
         print(response)
 
     elif command == "ui":
