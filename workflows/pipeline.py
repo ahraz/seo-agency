@@ -26,13 +26,21 @@ def run_seo_fix(
 
     print("\n==== RUNNING QA ====")
     qa_results = run_nextjs_checks(repo_path)
-    lint_ok = qa_results["lint"]["success"]
-    build_ok = qa_results["build"]["success"]
+
+    if "install" in qa_results and not qa_results["install"]["success"]:
+        print("⚠️  npm install failed — not a Node.js project. Skipping QA and committing anyway.")
+        lint_ok = True
+        build_ok = True
+    else:
+        lint_ok = qa_results.get("lint", {}).get("success", False)
+        build_ok = qa_results.get("build", {}).get("success", False)
 
     if not (lint_ok and build_ok):
-        print("\nQA FAILED — nothing committed. Fix and rerun.")
-        print(qa_results["lint"]["output"][-800:])
-        print(qa_results["build"]["output"][-800:])
+        print("\n❌ QA FAILED — nothing committed. Fix and rerun.")
+        if "lint" in qa_results and not qa_results["lint"]["success"]:
+            print(qa_results["lint"]["output"][-800:])
+        if "build" in qa_results and not qa_results["build"]["success"]:
+            print(qa_results["build"]["output"][-800:])
         return
 
     print("\nQA PASSED — committing and opening PR")

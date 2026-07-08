@@ -43,8 +43,15 @@ def run_shell_command(command: str, cwd: str = ".") -> str:
 
 
 def run_nextjs_checks(repo_path):
-
     results = {}
+
+    # Install dependencies if node_modules missing
+    node_modules = os.path.join(repo_path, "node_modules")
+    if not os.path.exists(node_modules):
+        install_result = run_command("npm install", repo_path)
+        results["install"] = install_result
+        if not install_result["success"]:
+            return results
 
     results["lint"] = run_command(
         "npm run lint",
