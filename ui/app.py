@@ -70,6 +70,7 @@ st.markdown("""
     }
 
     section[data-testid="stSidebar"] .stRadio > label {
+        color: #e1e8ed !important;
         font-size: 0.85rem;
         padding: 0.4rem 0.75rem;
         border-radius: 8px;
@@ -77,12 +78,23 @@ st.markdown("""
     }
     section[data-testid="stSidebar"] .stRadio > label:hover {
         background: rgba(59,130,246,0.1);
-        color: #3b82f6;
+        color: #60a5fa !important;
     }
     section[data-testid="stSidebar"] .stRadio > label[data-selected="true"] {
         background: rgba(59,130,246,0.15);
-        color: #3b82f6;
+        color: #60a5fa !important;
         font-weight: 600;
+    }
+    /* Fix sidebar subheader and other text elements */
+    section[data-testid="stSidebar"] .stMarkdown h3 {
+        color: #e1e8ed !important;
+    }
+    section[data-testid="stSidebar"] .stTextInput input {
+        color: #e1e8ed !important;
+        background: #1f2937 !important;
+    }
+    section[data-testid="stSidebar"] .stTextInput label {
+        color: #9ca3af !important;
     }
 
     /* ── Cards ──────────────────────────────────────────── */
@@ -213,6 +225,14 @@ if "cloned_repo_info" not in st.session_state:
     st.session_state.cloned_repo_info = None
 if "quick_check_result" not in st.session_state:
     st.session_state.quick_check_result = None
+if "ui_api_key" not in st.session_state:
+    st.session_state.ui_api_key = DEEPSEEK_API_KEY or ""
+if "ui_model" not in st.session_state:
+    st.session_state.ui_model = DEEPSEEK_MODEL or "deepseek-chat"
+
+# Allow UI-entered key to override env var for this session
+ACTIVE_API_KEY = st.session_state.ui_api_key or DEEPSEEK_API_KEY
+ACTIVE_MODEL = st.session_state.ui_model or DEEPSEEK_MODEL
 
 
 # ─── Sidebar ─────────────────────────────────────────────────────────────────
@@ -277,7 +297,7 @@ def render_sidebar():
 
     st.sidebar.markdown("---")
     st.sidebar.markdown("### System Status")
-    has_key = bool(DEEPSEEK_API_KEY)
+    has_key = bool(ACTIVE_API_KEY)
     st.sidebar.markdown(
         f'<span class="badge {"badge-ok" if has_key else "badge-err"}">'
         f'{"LLM Connected" if has_key else "No API Key"}</span>',
@@ -285,11 +305,11 @@ def render_sidebar():
     )
 
     if has_key:
-        st.sidebar.markdown(f'<span class="badge badge-info" style="margin-left:0.3rem">{DEEPSEEK_MODEL or "deepseek-chat"}</span>', unsafe_allow_html=True)
+        st.sidebar.markdown(f'<span class="badge badge-info" style="margin-left:0.3rem">{ACTIVE_MODEL or "deepseek-chat"}</span>', unsafe_allow_html=True)
     else:
         st.sidebar.markdown(
             '<div style="font-size:0.75rem;color:#9ca3af;margin-top:0.5rem">'
-            'Set OPENAI_API_KEY in .env to enable agents</div>',
+            'Go to **Settings** to enter your API key</div>',
             unsafe_allow_html=True,
         )
 
@@ -508,12 +528,12 @@ def render_dashboard():
             unsafe_allow_html=True,
         )
     with col4:
-        status = "Active" if DEEPSEEK_API_KEY else "No Key"
-        badge = "badge badge-ok" if DEEPSEEK_API_KEY else "badge badge-err"
+        status = "Active" if ACTIVE_API_KEY else "No Key"
+        badge = "badge badge-ok" if ACTIVE_API_KEY else "badge badge-err"
         st.markdown(
             f'<div class="card"><h3>LLM</h3><div class="value" style="font-size:1.2rem">'
             f'<span class="{badge}">{status}</span></div>'
-            f'<div style="font-size:0.75rem;color:#6b7280">{DEEPSEEK_MODEL or "—"}</div></div>',
+            f'<div style="font-size:0.75rem;color:#6b7280">{ACTIVE_MODEL or "—"}</div></div>',
             unsafe_allow_html=True,
         )
 
@@ -644,13 +664,13 @@ def render_campaign():
     st.markdown('<div class="section-title">🚀 Campaign</div>', unsafe_allow_html=True)
     st.markdown('<div class="section-sub">Run a full multi-agent SEO campaign</div>', unsafe_allow_html=True)
 
-    if not DEEPSEEK_API_KEY:
-        st.warning("⚠️ No API key configured. Set OPENAI_API_KEY in your .env file to run campaigns.")
+    if not ACTIVE_API_KEY:
+        st.warning("⚠️ No API key configured. [Go to Settings](#) to enter your DeepSeek or OpenAI API key, or add `OPENAI_API_KEY` to your `.env` file.")
         st.markdown("""
         <div style="background:#f9fafb;border-radius:10px;padding:1rem;font-size:0.85rem">
-        <strong>To set up:</strong><br>
-        1. Copy <code>.env.example</code> → <code>.env</code><br>
-        2. Add your <strong>OpenAI</strong> or <strong>DeepSeek</strong> API key<br>
+        <strong>Quick setup:</strong><br>
+        1. Go to the <strong>Settings</strong> page and paste your API key<br>
+        2. Or create <code>.env</code> with <code>OPENAI_API_KEY=sk-...</code><br>
         3. Restart the app
         </div>
         """, unsafe_allow_html=True)
@@ -897,8 +917,8 @@ def render_workflows():
     st.markdown('<div class="section-title">⚙️ Workflows</div>', unsafe_allow_html=True)
     st.markdown('<div class="section-sub">Run individual automation pipelines</div>', unsafe_allow_html=True)
 
-    if not DEEPSEEK_API_KEY:
-        st.warning("⚠️ Workflows require an API key. Configure OPENAI_API_KEY in your .env file.")
+    if not ACTIVE_API_KEY:
+        st.warning("⚠️ Workflows require an API key. Go to **Settings** to enter one.")
         return
 
     workflows = {
@@ -1006,28 +1026,71 @@ def render_settings():
     st.markdown('<div class="section-title">⚙️ Settings</div>', unsafe_allow_html=True)
     st.markdown('<div class="section-sub">Configuration and system info</div>', unsafe_allow_html=True)
 
-    col1, col2 = st.columns(2)
+    col1, col2 = st.columns([3, 2])
 
     with col1:
-        st.markdown("### Environment")
-        env_vars = {
-            "OPENAI_API_KEY": f"{DEEPSEEK_API_KEY[:8]}...{DEEPSEEK_API_KEY[-4:]}" if DEEPSEEK_API_KEY and len(DEEPSEEK_API_KEY) > 12 else "Not set",
-            "OPENAI_MODEL": DEEPSEEK_MODEL or "Not set",
-            "GITHUB_TOKEN": "Set" if os.getenv("GITHUB_TOKEN") else "Not set",
-        }
-        for k, v in env_vars.items():
-            st.text_input(k, value=v, disabled=True)
+        st.markdown("### 🔑 API Key")
+        st.markdown("Enter your API key here to use it **for this session**. It won't be saved to disk — to persist, add it to `.env`.")
 
-        st.markdown("### LLM Test")
+        api_key_input = st.text_input(
+            "OpenAI / DeepSeek API Key",
+            value=st.session_state.ui_api_key,
+            type="password",
+            placeholder="sk-... or your DeepSeek key",
+            help="This overrides the .env value for the current session",
+            key="settings_api_key_input",
+        )
+
+        model_input = st.text_input(
+            "Model",
+            value=st.session_state.ui_model,
+            placeholder="deepseek-chat",
+            help="e.g. deepseek-chat, gpt-4, gpt-3.5-turbo",
+            key="settings_model_input",
+        )
+
+        col_save, col_status = st.columns([1, 2])
+        with col_save:
+            if st.button("💾 Apply Key", type="primary", use_container_width=True):
+                st.session_state.ui_api_key = api_key_input
+                st.session_state.ui_model = model_input
+                # Also set in live env so get_llm() and workflows use it
+                os.environ["OPENAI_API_KEY"] = api_key_input
+                os.environ["OPENAI_MODEL"] = model_input
+                st.session_state.pop("quick_check_result", None)
+                st.success("✅ API key applied for this session!")
+                time.sleep(0.5)
+                st.rerun()
+
+        with col_status:
+            if ACTIVE_API_KEY:
+                masked = ACTIVE_API_KEY[:8] + "..." + ACTIVE_API_KEY[-4:] if len(ACTIVE_API_KEY) > 12 else "Set"
+                st.markdown(f'<div style="padding:0.4rem 0"><span class="badge badge-ok">Active: {masked}</span></div>', unsafe_allow_html=True)
+            else:
+                st.markdown(f'<div style="padding:0.4rem 0"><span class="badge badge-err">No key set</span></div>', unsafe_allow_html=True)
+
+        st.markdown("### 🧪 LLM Test")
         if st.button("Test LLM Connection", use_container_width=True):
             with st.spinner("Testing..."):
                 try:
                     from tools.llm import get_llm
+                    # Temporarily override env for the test
+                    os.environ["OPENAI_API_KEY"] = ACTIVE_API_KEY
                     llm = get_llm()
                     response = llm.call("Reply only with: ✅ Connection successful")
                     st.success(response)
                 except Exception as e:
                     st.error(f"Connection failed: {e}")
+
+        st.markdown("### Environment Variables (read-only)")
+        env_vars = {
+            "OPENAI_API_KEY (session)": f"{ACTIVE_API_KEY[:8]}...{ACTIVE_API_KEY[-4:]}" if ACTIVE_API_KEY and len(ACTIVE_API_KEY) > 12 else "Not set",
+            "OPENAI_MODEL": ACTIVE_MODEL or "Not set",
+            "OPENAI_API_KEY (.env file)": f"{DEEPSEEK_API_KEY[:8]}...{DEEPSEEK_API_KEY[-4:]}" if DEEPSEEK_API_KEY and len(DEEPSEEK_API_KEY) > 12 else "Not set",
+            "GITHUB_TOKEN": "Set" if os.getenv("GITHUB_TOKEN") else "Not set",
+        }
+        for k, v in env_vars.items():
+            st.text_input(k, value=v, disabled=True)
 
     with col2:
         st.markdown("### Client Profile")
