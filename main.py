@@ -17,6 +17,7 @@ Launch the web UI:
     python main.py ui
 """
 
+import subprocess
 import sys
 import os
 
@@ -59,8 +60,6 @@ def main():
         print(response)
 
     elif command == "ui":
-        import subprocess
-        import sys
         path = os.path.join(os.path.dirname(__file__), "ui", "app.py")
         print("Launching Streamlit UI...")
         subprocess.run([sys.executable, "-m", "streamlit", "run", path])
