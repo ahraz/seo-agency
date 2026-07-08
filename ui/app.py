@@ -1,8 +1,10 @@
-"""SEO Agency — One-page Streamlit UI."""
+"""SEO Agency — One-page Streamlit UI with live streaming agent logs."""
 
 import os
 import sys
 import time
+import tempfile
+import threading
 import streamlit as st
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
@@ -19,7 +21,12 @@ for key, default in [
     ("api_key", DEEPSEEK_API_KEY or ""),
     ("model", DEEPSEEK_MODEL or ""),
     ("results", ""),
-    ("running", False),
+    # Background-action tracking
+    ("_action", None),       # "audit" | "fix" | "blog" | None
+    ("_log_file", None),     # path to temp log file
+    ("_thread", None),       # background thread
+    ("_done", False),        # thread completed
+    ("_blog_topic", ""),     # pending blog topic
 ]:
     if key not in st.session_state:
         st.session_state[key] = default
@@ -32,23 +39,31 @@ if ACTIVE_API_KEY:
 if ACTIVE_MODEL:
     os.environ.setdefault("OPENAI_MODEL", ACTIVE_MODEL)
 
-
 # ── CSS ──────────────────────────────────────────────────────────────────────
 st.markdown(
     """
 <style>
     .main > div { padding: 1rem 2rem; }
-    .big-btn { font-size: 1.3rem !important; font-weight: 600 !important; padding: 0.75rem 1rem !important; }
     .result-box {
-        background: #1a1a2e; color: #e0e0e0; border-radius: 8px;
-        padding: 1.2rem; font-family: monospace; font-size: 0.85rem;
-        white-space: pre-wrap; margin-top: 1rem; max-height: 500px; overflow-y: auto;
+        background: #0d1117; color: #e6edf3; border-radius: 8px;
+        padding: 1rem; font-family: 'JetBrains Mono', 'Fira Code', monospace;
+        font-size: 0.82rem; line-height: 1.5;
+        white-space: pre-wrap; margin-top: 0.5rem;
+        height: 450px; overflow-y: auto;
+        border: 1px solid #30363d;
     }
+    .result-box .ts { color: #8b949e; }
+    .result-box .info { color: #58a6ff; }
+    .result-box .ok   { color: #3fb950; }
+    .result-box .warn { color: #d29922; }
+    .result-box .err  { color: #f85149; }
+    .result-box .agent { color: #bc8cff; font-weight: 600; }
     .badge-ok { background: #059669; color: #fff; padding: 0.15rem 0.6rem; border-radius: 4px; font-size: 0.75rem; }
     .badge-err { background: #dc2626; color: #fff; padding: 0.15rem 0.6rem; border-radius: 4px; font-size: 0.75rem; }
     .sidebar .sidebar-content { background: #0f1419; }
     h1, h2, h3 { margin-top: 0; }
     .stButton button { width: 100%; }
+    .spinner-text { color: #8b949e; font-size: 0.85rem; }
 </style>
 """,
     unsafe_allow_html=True,
@@ -117,58 +132,75 @@ with st.sidebar:
     status = "🟢 Active" if ACTIVE_API_KEY else "🔴 No Key"
     st.markdown(f"**Status:** {status}  |  {ACTIVE_MODEL or '—'}")
 
-# ── Main area ────────────────────────────────────────────────────────────────
-st.title("📈 SEO Agency")
-st.markdown("Clone any GitHub repo → audit SEO → fix issues → write blog posts")
 
-repo_path = st.session_state.cloned_repo_path
-has_repo = bool(repo_path and os.path.exists(repo_path))
+# ── Helpers: background execution with live log ──────────────────────────────
+def _start_action(action_name: str, func):
+    """Run `func` in a background thread, streaming stdout/stderr to a temp log."""
+    log_file = tempfile.mktemp(suffix=".log", prefix=f"seo-{action_name}-")
+    st.session_state._action = action_name
+    st.session_state._log_file = log_file
+    st.session_state._done = False
 
-col1, col2, col3 = st.columns(3)
-with col1:
-    audit_clicked = st.button("🔍 Audit Site", type="primary", use_container_width=True, disabled=not has_repo)
-with col2:
-    fix_clicked = st.button("🔧 Fix Issues", type="primary", use_container_width=True, disabled=not has_repo)
-with col3:
-    blog_clicked = st.button("✍️ Write Blog", type="primary", use_container_width=True, disabled=not has_repo)
+    def _worker():
+        with open(log_file, "w", buffering=1) as f:
+            import contextlib
+            with contextlib.redirect_stdout(f):
+                with contextlib.redirect_stderr(f):
+                    try:
+                        func()
+                    except Exception as e:
+                        print(f"❌ Unhandled error: {e}")
+        st.session_state._done = True
 
-if not has_repo:
-    st.info("👈 Enter a GitHub repo URL in the sidebar and click **Clone Repo** to get started.")
-elif st.session_state.cloned_repo_info:
-    info = st.session_state.cloned_repo_info
-    st.markdown(
-        f"**{repo_url.split('/')[-1]}** — {info.get('total_files', 0)} files, "
-        f"{info.get('images_count', 0)} images, "
-        f"{len(info.get('seo_related_files', []))} SEO-related files"
-    )
-
-
-# ── Action handlers ──────────────────────────────────────────────────────────
-def _run_and_capture(func, label):
-    from io import StringIO
-    import contextlib
-    buf = StringIO()
-    st.session_state.running = True
-    try:
-        with contextlib.redirect_stdout(buf):
-            func()
-    except Exception as e:
-        print(f"❌ Error: {e}")
-    st.session_state.results = buf.getvalue()
-    st.session_state.running = False
+    t = threading.Thread(target=_worker, daemon=True)
+    st.session_state._thread = t
+    t.start()
 
 
+def _read_log() -> str:
+    """Return the full contents of the current log file (or empty string)."""
+    lf = st.session_state._log_file
+    if lf and os.path.exists(lf):
+        with open(lf, "r") as f:
+            return f.read()
+    return ""
+
+
+def _is_running() -> bool:
+    """True if a background action is still in progress."""
+    if not st.session_state._action:
+        return False
+    t = st.session_state._thread
+    if t is None:
+        return False
+    return t.is_alive()
+
+
+def _stop_action():
+    """Clear action state (called when done or cancelled)."""
+    st.session_state._action = None
+    st.session_state._log_file = None
+    st.session_state._thread = None
+    st.session_state._done = False
+
+
+# ── Action functions ─────────────────────────────────────────────────────────
 def _run_audit(path):
     from tools.seo_audit import scan_files
+    print("🔍 SEO Audit starting...\n")
     issues = scan_files(path)
     if issues:
-        print(f"Found {len(issues)} SEO issues:\n")
-        for i, issue in enumerate(issues[:30], 1):
-            print(f"  {i}. {issue}")
-        if len(issues) > 30:
-            print(f"\n  ... and {len(issues) - 30} more.")
+        print(f"\n{'='*50}")
+        print(f" Found {len(issues)} SEO issues:")
+        print(f"{'='*50}\n")
+        for i, issue in enumerate(issues[:40], 1):
+            print(f"  {i:>2}. {issue}")
+        if len(issues) > 40:
+            print(f"\n  ... and {len(issues) - 40} more.")
+        print(f"\n{'='*50}")
+        print(" ✅ Audit complete")
     else:
-        print("✅ No SEO issues found! Your site is in good shape.")
+        print("\n✅ No SEO issues found! Your site is in good shape.")
 
 
 def _run_fix(path):
@@ -182,19 +214,69 @@ def _run_blog(path, topic):
     print(result)
 
 
-if audit_clicked:
-    _run_and_capture(lambda: _run_audit(repo_path), "Auditing...")
-    st.rerun()
+# ── Button handlers ──────────────────────────────────────────────────────────
+running = _is_running()
 
-if fix_clicked:
-    _run_and_capture(lambda: _run_fix(repo_path), "Fixing...")
-    st.rerun()
+if not running:
+    if st.session_state._action:  # just finished
+        _stop_action()
+        st.rerun()
 
-# ── Blog topic prompt ────────────────────────────────────────────────────────
-if blog_clicked and not st.session_state.get("_blog_topic"):
-    st.session_state["_blog_topic"] = ""
+audit_clicked = False
+fix_clicked = False
+blog_clicked = False
+blog_go_clicked = False
 
-if blog_clicked and not st.session_state._blog_topic:
+repo_path = st.session_state.cloned_repo_path
+has_repo = bool(repo_path and os.path.exists(repo_path))
+
+# Show repo info
+if has_repo and st.session_state.cloned_repo_info:
+    info = st.session_state.cloned_repo_info
+    st.markdown(
+        f"**{repo_url.split('/')[-1]}** — {info.get('total_files', 0)} files, "
+        f"{info.get('images_count', 0)} images, "
+        f"{len(info.get('seo_related_files', []))} SEO-related files"
+    )
+
+# ── Main: 3 action buttons (disabled while running) ─────────────────────────
+col1, col2, col3 = st.columns(3)
+with col1:
+    audit_clicked = st.button(
+        "🔍 Audit Site", type="primary", use_container_width=True,
+        disabled=not has_repo or running,
+    )
+with col2:
+    fix_clicked = st.button(
+        "🔧 Fix Issues", type="primary", use_container_width=True,
+        disabled=not has_repo or running,
+    )
+with col3:
+    blog_clicked = st.button(
+        "✍️ Write Blog", type="primary", use_container_width=True,
+        disabled=not has_repo or running,
+    )
+
+if not has_repo:
+    st.info("👈 Enter a GitHub repo URL in the sidebar and click **Clone Repo** to get started.")
+
+# ── Start actions on click ───────────────────────────────────────────────────
+if not running:
+    if audit_clicked:
+        _start_action("audit", lambda: _run_audit(repo_path))
+        st.rerun()
+
+    if fix_clicked:
+        _start_action("fix", lambda: _run_fix(repo_path))
+        st.rerun()
+
+    if blog_clicked:
+        st.session_state._blog_topic = ""
+        # Don't start yet — we need the topic
+        # The next block handles this
+
+# ── Blog topic prompt (shown after clicking Write Blog, before starting) ─────
+if blog_clicked and not running and st.session_state._blog_topic == "":
     st.markdown("### ✍️ What do you want to write about?")
     col_topic, col_go = st.columns([3, 1])
     with col_topic:
@@ -207,16 +289,53 @@ if blog_clicked and not st.session_state._blog_topic:
     with col_go:
         if st.button("Go", type="primary", use_container_width=True) and topic:
             st.session_state._blog_topic = topic
-            _run_and_capture(lambda: _run_blog(repo_path, topic), "Writing...")
+            _start_action("blog", lambda: _run_blog(repo_path, topic))
             st.rerun()
 
-# ── Results output ───────────────────────────────────────────────────────────
-if st.session_state.results:
-    st.markdown("### 📋 Results")
-    st.markdown(
-        f'<div class="result-box">{st.session_state.results}</div>',
-        unsafe_allow_html=True,
-    )
+
+# ── Live streaming log (when an action is running or just finished) ──────────
+if st.session_state._action:
+    log_content = _read_log()
+
+    # Determine status label
+    action_labels = {"audit": "🔍 Auditing", "fix": "🔧 Fixing Issues", "blog": "✍️ Writing Blog"}
+    label = action_labels.get(st.session_state._action, "Running")
+
+    if running:
+        st.markdown(f"### ⏳ {label}...")
+    else:
+        st.markdown(f"### ✅ {label} — Complete")
+        # One last read to get final output
+        log_content = _read_log()
+
+    # Live updating box
+    display = log_content[-30000:] if len(log_content) > 30000 else log_content
+    st.markdown(f'<div class="result-box">{display}</div>', unsafe_allow_html=True)
+
+    if running:
+        st.caption("🔄 Streaming live — this page auto-refreshes every 2 seconds")
+        time.sleep(2)
+        st.rerun()
+    else:
+        # Action just completed — show final log + button to clear
+        st.success("✅ Done!")
+
+        # Capture into results for persistence
+        st.session_state.results = log_content
+
+        col_clr, col_stop = st.columns([1, 3])
+        with col_clr:
+            if st.button("Clear", use_container_width=True):
+                st.session_state.results = ""
+                st.session_state.pop("_blog_topic", None)
+                _stop_action()
+                st.rerun()
+
+# ── Persisted results (shown when no action is happening) ────────────────────
+if not st.session_state._action and st.session_state.results:
+    st.markdown("### 📋 Last Run Results")
+    display = st.session_state.results[-30000:] if len(st.session_state.results) > 30000 else st.session_state.results
+    st.markdown(f'<div class="result-box">{display}</div>', unsafe_allow_html=True)
     if st.button("Clear Results"):
         st.session_state.results = ""
         st.session_state.pop("_blog_topic", None)
@@ -230,12 +349,12 @@ try:
     import sqlite3
     conn = sqlite3.connect(DB_PATH)
     rows = conn.execute(
-        "SELECT agent_name, task_name, status, timestamp FROM activity_log ORDER BY id DESC LIMIT 20"
+        "SELECT agent_name, task_name, status, timestamp FROM activity_log ORDER BY id DESC LIMIT 15"
     ).fetchall()
     conn.close()
     if rows:
         for agent, task, status, ts in rows:
-            icon = "✅" if status == "Done" else "🔄" if status == "Running" else "❌"
+            icon = "✅" if status == "Done" else "🔄"
             st.markdown(f"{icon} **{agent}** — {task} _{ts[:19]}_")
     else:
         st.caption("No activity yet.")
