@@ -2,22 +2,28 @@ import os
 import json
 import subprocess
 
+from config.settings import GITHUB_TOKEN
+
+
+def _embed_token(url: str) -> str:
+    """Embed GITHUB_TOKEN into an HTTPS git URL so cloning/pushing
+    never prompts for credentials."""
+    token = GITHUB_TOKEN or os.environ.get("GITHUB_TOKEN") or os.environ.get("GH_TOKEN")
+    if not token:
+        return url
+    if not url.startswith("https://"):
+        return url  # SSH — leave alone
+    if f"://{token}@" in url or f":{token}@" in url or token in url:
+        return url  # already authed
+    return url.replace("https://", f"https://{token}@", 1)
+
 
 def clone_repo(repo_url, destination):
-
     if os.path.exists(destination):
         return "Repository already exists"
 
-    subprocess.run(
-        [
-            "git",
-            "clone",
-            repo_url,
-            destination
-        ],
-        check=True
-    )
-
+    authed_url = _embed_token(repo_url)
+    subprocess.run(["git", "clone", authed_url, destination], check=True)
     return "Repository cloned"
 
 
