@@ -59,7 +59,15 @@ def main():
         print(response)
 
     elif command == "ui":
-        from ui.app import main as ui_main
+        try:
+            from ui.app import main as ui_main
+        except ImportError as e:
+            name = e.name or ""
+            if "streamlit" in name or "ui" in str(e):
+                print("❌ Missing UI dependencies. Run:  pip install -r requirements.txt")
+            else:
+                print(f"❌ Import error: {e}")
+            return
         ui_main()
 
     else:

@@ -22,19 +22,25 @@ The system uses **CrewAI** to coordinate multiple AI agents, each with a specifi
 ## Quick Start
 
 ```bash
-# 1. Install dependencies
+# 1. Create and activate a virtual environment (Ubuntu/Debian)
+python3 -m venv venv
+source venv/bin/activate
+
+# 2. Install dependencies
 pip install -r requirements.txt
 
-# 2. Set up environment variables (copy and fill in)
+# 3. Set up environment variables (copy and fill in)
 cp .env.example .env
-# Edit .env with your API keys
+# Edit .env with your API keys (at minimum, set OPENAI_API_KEY)
 
-# 3. Run a full campaign
+# 4. Run a full campaign
 python main.py campaign
 
-# 4. Launch the web UI
+# 5. Launch the web UI
 python main.py ui
 ```
+
+> **Troubleshooting Ubuntu/Debian**: If you see `externally-managed-environment`, you are not inside a virtual environment. Create one with `python3 -m venv venv && source venv/bin/activate`, then run `pip install -r requirements.txt`. If you already see `(crewai)` in your terminal prompt, you're inside one — just run `pip install -r requirements.txt`.
 
 ## Environment Variables
 
