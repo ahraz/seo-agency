@@ -21,6 +21,8 @@ for key, default in [
     ("api_key", DEEPSEEK_API_KEY or ""),
     ("model", DEEPSEEK_MODEL or ""),
     ("results", ""),
+    ("_clean_results", ""),
+    ("_raw_log", ""),
     # Background-action tracking
     ("_action", None),       # "audit" | "fix" | "blog" | None
     ("_log_file", None),     # path to temp log file
@@ -184,6 +186,139 @@ def _stop_action():
     st.session_state._done = False
 
 
+# ── Log summarizer ───────────────────────────────────────────────────────────
+import re as _re
+
+
+def _strip_ansi(text: str) -> str:
+    """Remove ANSI escape sequences from text."""
+    return _re.sub(r"\x1b\[[0-9;]*[a-zA-Z]", "", text)
+
+
+def _summarize_log(raw: str) -> str:
+    """Extract a clean summary from the raw verbose log.
+
+    Strips ANSI codes, removes box-drawing borders, and keeps only
+    meaningful action lines: tool calls, agent output, errors, and
+    key results.  Returns *both* the clean summary and stores the
+    full raw text separately for the copy-logs button.
+    """
+    # Store raw for clipboard access
+    st.session_state._raw_log = raw
+
+    text = _strip_ansi(raw)
+    lines = text.split("\n")
+    kept = []
+    for line in lines:
+        stripped = line.strip()
+
+        # Skip empty lines
+        if not stripped:
+            continue
+
+        # Skip box-drawing borders
+        if _re.match(r"^[╭─╮│╰╯┌┐└┘├┤┬┴┼━┃\s]+$", stripped):
+            continue
+
+        # Skip purely decorative lines (only special chars)
+        if _re.match(r"^[\s│╎┃╏═║╔╗╚╝╟╢╞╡╪╫╤╧╨╩╦╬╠╣≈─━═\s]{10,}$", stripped):
+            continue
+
+        # Skip "Crew Execution Started" and "Tracing Status" banners
+        if "Crew Execution Started" in stripped or "Tracing Status" in stripped:
+            continue
+        if "Name:" in stripped and "ID:" in stripped:
+            continue
+        if _re.match(r"^[a-f0-9-]{20,}$", stripped):
+            continue
+
+        # Skip CrewAI verbose meta lines
+        if stripped.startswith("╭") or stripped.startswith("╰"):
+            continue
+        if stripped in ("│", "│\x1b[0m"):
+            continue
+        if "To enable tracing" in stripped:
+            continue
+
+        # Simplify tool execution headers
+        if "Tool Execution Started" in stripped:
+            m = _re.search(r"Tool:\s*(\S+)", stripped)
+            args_match = _re.search(r"Args:\s*(\{.*\})", stripped)
+            if m:
+                tool_name = m.group(1)
+                args_str = ""
+                if args_match:
+                    # Try to show a short summary of args
+                    args_raw = args_match.group(1)
+                    # Extract key info
+                    path_m = _re.search(r"['\"]path['\"]:\s*['\"]([^'\"]+)['\"]", args_raw)
+                    query_m = _re.search(r"['\"]query['\"]:\s*['\"]([^'\"<]{,80})['\"]", args_raw)
+                    if path_m:
+                        args_str = f" ({path_m.group(1)})"
+                    elif query_m:
+                        q = query_m.group(1)
+                        args_str = f" \"{q}{'...' if len(query_m.group(0)) > 80 else ''}\""
+                kept.append(f"🔧 {tool_name}{args_str}")
+            else:
+                kept.append(f"🔧 Tool call...")
+            continue
+
+        if "Tool Execution Completed" in stripped:
+            m = _re.search(r"Tool:\s*(\S+)", stripped)
+            if m:
+                kept.append(f"✅ {m.group(1)} completed")
+            continue
+
+        # Simplify agent started
+        if "Agent Started" in stripped:
+            m = _re.search(r"Agent:\s*(.+?)\s*\x1b", stripped) or _re.search(r"Agent:\s*(.+)", stripped)
+            if m:
+                kept.append(f"🤖 **{m.group(1).strip()}** is working...")
+            else:
+                kept.append("🤖 Agent thinking...")
+            continue
+
+        # Simplify agent final answer
+        if "Agent Final Answer" in stripped:
+            kept.append("📝 **Agent finalizing...**")
+            continue
+
+        # Simplify task started/completed
+        if "Task Started" in stripped:
+            kept.append("📋 Task assigned")
+            continue
+        if "Task Completed" in stripped:
+            kept.append("✅ Task complete")
+            continue
+
+        # Keep error lines
+        if "Error" in stripped or "error" in stripped.lower():
+            kept.append(f"❌ {stripped[:200]}")
+            continue
+
+        # Keep lines that look like meaningful output (#, numbers, bullets)
+        if _re.match(r"^[\d#]", stripped):
+            kept.append(stripped[:200])
+            continue
+
+        # Keep our own print() output (starts with emoji or has clear meaning)
+        if _re.match(r"^[✅❌🔍🔧✍️⚠️🔄📝📋✅❌➕➖]", stripped):
+            kept.append(stripped[:200])
+            continue
+
+        # Keep lines shorter than 120 that have content (likely agent thoughts)
+        if len(stripped) < 120 and len(stripped) > 10 and " " in stripped:
+            kept.append(stripped[:200])
+
+    # Deduplicate consecutive identical lines
+    final = []
+    for line in kept:
+        if not final or line != final[-1]:
+            final.append(line)
+
+    return "\n".join(final[-80:])  # cap at 80 lines
+
+
 # ── Action functions ─────────────────────────────────────────────────────────
 def _run_audit(path):
     from tools.seo_audit import scan_files
@@ -308,28 +443,49 @@ if st.session_state._action:
         st.markdown(f"### ⏳ {label}...")
     else:
         st.markdown(f"### ✅ {label} — Complete")
-        # One last read to get final output
         log_content = _read_log()
 
-    # Live updating box
-    display = log_content[-30000:] if len(log_content) > 30000 else log_content
+    # Summarize the log for clean display
+    clean = _summarize_log(log_content) if log_content else ""
+
+    # Show clean summary
+    if clean:
+        display = clean[-30000:] if len(clean) > 30000 else clean
+    else:
+        display = log_content[-30000:] if len(log_content) > 30000 else log_content
+
     st.markdown(f'<div class="result-box">{display}</div>', unsafe_allow_html=True)
 
+    col_copy, col_status = st.columns([1, 3])
+    with col_copy:
+        # Button to copy the full raw log
+        if st.button("📋 Copy Full Logs", use_container_width=True):
+            raw = st.session_state.get("_raw_log", log_content)
+            js = f"""
+            <script>
+            navigator.clipboard.writeText({raw!r});
+            </script>
+            """
+            st.markdown(js, unsafe_allow_html=True)
+            st.success("Copied!")
+
     if running:
-        st.caption("🔄 Streaming live — this page auto-refreshes every 2 seconds")
+        with col_status:
+            st.caption("🔄 Streaming live — this page auto-refreshes every 2 seconds")
         time.sleep(2)
         st.rerun()
     else:
-        # Action just completed — show final log + button to clear
-        st.success("✅ Done!")
-
         # Capture into results for persistence
         st.session_state.results = log_content
+        st.session_state._clean_results = clean
 
-        col_clr, col_stop = st.columns([1, 3])
+        with col_status:
+            st.success("✅ Done!")
+        col_clr, _ = st.columns([1, 3])
         with col_clr:
             if st.button("Clear", use_container_width=True):
                 st.session_state.results = ""
+                st.session_state._clean_results = ""
                 st.session_state.pop("_blog_topic", None)
                 _stop_action()
                 st.rerun()
@@ -337,10 +493,23 @@ if st.session_state._action:
 # ── Persisted results (shown when no action is happening) ────────────────────
 if not st.session_state._action and st.session_state.results:
     st.markdown("### 📋 Last Run Results")
-    display = st.session_state.results[-30000:] if len(st.session_state.results) > 30000 else st.session_state.results
+
+    clean = st.session_state.get("_clean_results", "")
+    if clean:
+        display = clean[-30000:] if len(clean) > 30000 else clean
+    else:
+        display = st.session_state.results[-30000:] if len(st.session_state.results) > 30000 else st.session_state.results
+
     st.markdown(f'<div class="result-box">{display}</div>', unsafe_allow_html=True)
+
+    col1, col2 = st.columns([1, 4])
+    with col1:
+        if st.button("📋 Copy Full Logs", use_container_width=True, key="copy_persisted"):
+            st.markdown(f"<script>navigator.clipboard.writeText({st.session_state.results!r})</script>", unsafe_allow_html=True)
+            st.success("Copied!")
     if st.button("Clear Results"):
         st.session_state.results = ""
+        st.session_state._clean_results = ""
         st.session_state.pop("_blog_topic", None)
         st.rerun()
 

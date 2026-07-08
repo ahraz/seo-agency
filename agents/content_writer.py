@@ -2,6 +2,7 @@ from crewai import Agent
 from tools.llm import get_llm
 from tools.search_tool import web_search
 from tools.file_editor import make_file_tools
+from tools.memory import read_memory, write_memory, list_memory_keys
 
 
 def content_writer_agent(repo_path: str = "clients/gta-scrub/repo"):
@@ -18,9 +19,10 @@ def content_writer_agent(repo_path: str = "clients/gta-scrub/repo"):
             "business websites. You research topics online, write "
             "helpful authoritative content using search intent and "
             "semantic keywords, then save the post directly to the repo "
-            "so it can be published."
+            "so it can be published. You use Read/Write Memory to share "
+            "topic research and writing decisions with other agents."
         ),
-        tools=[web_search, write_ft],
+        tools=[web_search, write_ft, read_memory, write_memory, list_memory_keys],
         llm=get_llm(),
         verbose=True
     )
