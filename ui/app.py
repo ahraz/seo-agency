@@ -207,6 +207,10 @@ if "campaign_log" not in st.session_state:
     st.session_state.campaign_log = ""
 if "campaign_result" not in st.session_state:
     st.session_state.campaign_result = ""
+if "cloned_repo_path" not in st.session_state:
+    st.session_state.cloned_repo_path = None
+if "cloned_repo_info" not in st.session_state:
+    st.session_state.cloned_repo_info = None
 
 
 # ─── Sidebar ─────────────────────────────────────────────────────────────────
@@ -225,6 +229,48 @@ def render_sidebar():
     pages = ["Dashboard", "Campaign", "SEO Audit", "Workflows", "Activity Log", "Settings"]
     selected = st.sidebar.radio("Go to", pages, label_visibility="collapsed", index=pages.index(st.session_state.page))
     st.session_state.page = selected
+
+    # ── GitHub Repo Cloner ──────────────────────────────────────────
+    st.sidebar.markdown("---")
+    st.sidebar.markdown("### GitHub Repo")
+    repo_url = st.sidebar.text_input(
+        "Repo URL",
+        placeholder="https://github.com/owner/repo",
+        label_visibility="collapsed",
+        key="sidebar_repo_url",
+    )
+
+    col_a, col_b = st.sidebar.columns([1, 1])
+    with col_a:
+        clone_clicked = st.button("📥 Clone", use_container_width=True, key="clone_btn")
+    with col_b:
+        clear_clicked = st.button("✕ Clear", use_container_width=True, key="clear_repo_btn")
+
+    if clear_clicked:
+        st.session_state.cloned_repo_path = None
+        st.session_state.cloned_repo_info = None
+        st.rerun()
+
+    if clone_clicked and repo_url:
+        _clone_github_repo(repo_url)
+
+    # Show cloned repo info
+    info = st.session_state.cloned_repo_info
+    if info:
+        st.sidebar.markdown(
+            f'<div style="background:#1f2937;border-radius:8px;padding:0.6rem 0.75rem;font-size:0.75rem">'
+            f'<div style="color:#3b82f6;font-weight:600;margin-bottom:0.2rem">📦 {info["name"]}</div>'
+            f'<div style="color:#9ca3af">{info["files"]} files · {info.get("framework", "Unknown")}</div>'
+            f'</div>',
+            unsafe_allow_html=True,
+        )
+    elif repo_url and not clone_clicked:
+        placeholder = repo_url.rstrip("/").split("/")[-1] or "repo"
+        st.sidebar.markdown(
+            f'<div style="font-size:0.72rem;color:#6b7280;padding:0.2rem 0">'
+            f'Click Clone to fetch <strong>{placeholder}</strong></div>',
+            unsafe_allow_html=True,
+        )
 
     st.sidebar.markdown("---")
     st.sidebar.markdown("### System Status")
@@ -248,6 +294,61 @@ def render_sidebar():
         '<div class="sidebar-footer">v1.0 &middot; CrewAI &middot; Streamlit</div>',
         unsafe_allow_html=True,
     )
+
+
+def _clone_github_repo(repo_url: str):
+    """Clone a GitHub repo and store metadata in session state."""
+    repo_url = repo_url.strip()
+    if not repo_url.startswith("http"):
+        st.sidebar.error("Enter a full GitHub URL (https://github.com/...)")
+        return
+
+    # Extract owner/name from URL
+    match = re.search(r"github\.com[:/]([^/]+/[^/]+?)(?:\.git)?$", repo_url)
+    if not match:
+        st.sidebar.error("Could not parse repo name from URL")
+        return
+    repo_full = match.group(1).rstrip("/")
+    local_name = repo_full.replace("/", "-")
+    dest = os.path.join(os.path.dirname(__file__), "..", "clients", local_name, "repo")
+    dest = os.path.abspath(dest)
+
+    with st.sidebar.status(f"Cloning {repo_full}...", expanded=False) as status:
+        try:
+            from tools.repo_analyzer import clone_repo, analyze_repo
+            result = clone_repo(repo_url, dest)
+            status.write(f"Clone: {result}")
+            report = analyze_repo(dest)
+
+            # Detect framework
+            framework = "Unknown"
+            deps_dict = report.get("framework", {})
+            if isinstance(deps_dict, dict):
+                all_deps = list(deps_dict.get("dependencies", {}).keys())
+                if any("next" in d for d in all_deps):
+                    framework = "Next.js"
+                elif any("react" in d for d in all_deps):
+                    framework = "React"
+                elif any("vue" in d for d in all_deps):
+                    framework = "Vue"
+                elif any("angular" in d for d in all_deps):
+                    framework = "Angular"
+
+            info = {
+                "name": repo_full,
+                "path": dest,
+                "files": report.get("total_files", 0),
+                "images": report.get("images_count", 0),
+                "framework": framework,
+                "seo_files": report.get("seo_related_files", []),
+            }
+            st.session_state.cloned_repo_path = dest
+            st.session_state.cloned_repo_info = info
+            status.update(label=f"✅ Cloned {repo_full}", state="complete")
+            st.rerun()
+        except Exception as e:
+            status.update(label=f"❌ Clone failed", state="error")
+            st.sidebar.error(str(e))
 
 
 # ─── Live URL Audit Engine ──────────────────────────────────────────────────
@@ -415,6 +516,39 @@ def render_dashboard():
 
     st.markdown('<hr class="sep">', unsafe_allow_html=True)
 
+    # Cloned repo summary
+    info = st.session_state.cloned_repo_info
+    if info:
+        st.markdown("### 📦 Active Repository")
+        repo_path = info["path"]
+        col1, col2, col3, col4 = st.columns(4)
+        with col1:
+            st.markdown(
+                f'<div class="card"><h3>Repo</h3><div class="value" style="font-size:1rem">{info["name"]}</div></div>',
+                unsafe_allow_html=True,
+            )
+        with col2:
+            st.markdown(
+                f'<div class="card"><h3>Files</h3><div class="value">{info["files"]}</div></div>',
+                unsafe_allow_html=True,
+            )
+        with col3:
+            st.markdown(
+                f'<div class="card"><h3>Framework</h3><div class="value" style="font-size:1.2rem">{info["framework"]}</div></div>',
+                unsafe_allow_html=True,
+            )
+        with col4:
+            st.markdown(
+                f'<div class="card"><h3>Images</h3><div class="value">{info["images"]}</div></div>',
+                unsafe_allow_html=True,
+            )
+        st.markdown(
+            f'<div style="font-size:0.8rem;color:#6b7280">Path: <code>{repo_path}</code></div>',
+            unsafe_allow_html=True,
+        )
+
+        st.markdown('<hr class="sep">', unsafe_allow_html=True)
+
     # Quick actions
     st.markdown("### Quick Actions")
     col1, col2, col3, col4 = st.columns(4)
@@ -515,10 +649,21 @@ def render_campaign():
         """, unsafe_allow_html=True)
         return
 
+    # Show cloned repo info if available
+    cloned_info = st.session_state.cloned_repo_info
+    if cloned_info:
+        st.success(
+            f"📦 Cloned repo **{cloned_info['name']}** ({cloned_info['files']} files, "
+            f"{cloned_info['framework']}) — will use this for campaign analysis"
+        )
+
     with st.expander("Client Configuration", expanded=True):
         col1, col2 = st.columns(2)
         with col1:
-            client_name = st.text_input("Client Name", "GTA Scrub")
+            client_name = st.text_input(
+                "Client Name",
+                value=cloned_info["name"].split("/")[-1].replace("-", " ").title() if cloned_info else "GTA Scrub",
+            )
         with col2:
             client_location = st.text_input("Location", "Greater Toronto Area")
 
@@ -526,7 +671,10 @@ def render_campaign():
         with col1:
             industry = st.text_input("Industry", "Commercial Cleaning")
         with col2:
-            website = st.text_input("Website", "https://gtascrub.com")
+            website = st.text_input(
+                "Website",
+                value=f"https://{cloned_info['name']}" if cloned_info else "https://gtascrub.com",
+            )
 
     if st.button("▶️ Run Campaign", type="primary", use_container_width=True):
         progress_bar = st.progress(0, text="Initializing agents...")
@@ -607,7 +755,19 @@ def render_seo_audit():
                     _render_audit_results(data)
 
     else:
-        path = st.text_input("Folder Path", placeholder="/path/to/website", label_visibility="collapsed")
+        # Show cloned repo shortcut
+        cloned_path = st.session_state.cloned_repo_path
+        default_path = cloned_path if cloned_path else ""
+
+        if cloned_path:
+            st.info(f"📦 Cloned repo available: **{st.session_state.cloned_repo_info['name']}** — click Scan to audit it")
+
+        path = st.text_input(
+            "Folder Path",
+            value=default_path,
+            placeholder="/path/to/website",
+            label_visibility="collapsed",
+        )
         if st.button("▶️ Scan Folder", type="primary", use_container_width=True):
             if not path or not os.path.exists(path):
                 st.error(f"Path not found: {path}")
