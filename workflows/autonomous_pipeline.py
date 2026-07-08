@@ -22,7 +22,7 @@ def run_autonomous_loop(
     print(f"Found {len(issues)} issues. Passing to the Swarm...")
     issues_text = "\n".join(issues)
 
-    tech_agent = technical_seo_agent()
+    tech_agent = technical_seo_agent(repo_path=repo_path)
     dev_agent = seo_developer_agent(repo_path=repo_path)
 
     plan_task = Task(
@@ -59,7 +59,11 @@ def run_autonomous_loop(
         "git status --porcelain", cwd=repo_path, shell=True, capture_output=True, text=True
     ).stdout
     if not git_status_result.strip():
-        print("\n❌ ABORTING: The agent talked about the fix but failed to physically edit any files.")
+        print("\n⚠️  The agent reviewed the code but did not edit any files.")
+        print("   This usually means the fix was already in place, or the")
+        print("   agent determined no changes were needed.")
+        print("   Try running with a different issue description if you")
+        print("   expected a file change.")
         return
 
     print("\n3. Running QA Validation...")

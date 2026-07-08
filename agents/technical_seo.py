@@ -1,26 +1,27 @@
 from crewai import Agent
 from tools.llm import get_llm
 from tools.search_tool import web_search
-from tools.browser_tool import browse_web_page
+from tools.file_editor import make_file_tools
 
 
-def technical_seo_agent():
+def technical_seo_agent(repo_path: str = "clients/gta-scrub/repo"):
+    read_ft, _, list_ft = make_file_tools(repo_path)
     return Agent(
         role="Technical SEO Engineer",
         goal=(
             "Audit websites and identify technical SEO issues "
             "that prevent search engines from properly crawling, "
-            "indexing, and ranking pages. Use web search and "
-            "browsing to research best practices."
+            "indexing, and ranking pages. Use web search to research "
+            "best practices, and read files to inspect the codebase."
         ),
         backstory=(
             "You are a senior technical SEO engineer. "
             "You specialize in website audits, Core Web Vitals, "
             "structured data, crawling, indexing, and performance "
-            "optimization. You research issues online before "
-            "recommending fixes."
+            "optimization. You use Read File to inspect source code "
+            "and Web Search to research solutions."
         ),
-        tools=[web_search, browse_web_page],
+        tools=[web_search, read_ft, list_ft],
         llm=get_llm(),
         verbose=True
     )
