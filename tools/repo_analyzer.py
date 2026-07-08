@@ -23,8 +23,20 @@ def clone_repo(repo_url, destination):
         return "Repository already exists"
 
     authed_url = _embed_token(repo_url)
-    subprocess.run(["git", "clone", authed_url, destination], check=True)
-    return "Repository cloned"
+    try:
+        result = subprocess.run(
+            ["git", "clone", authed_url, destination],
+            capture_output=True, text=True, timeout=120
+        )
+        if result.returncode != 0:
+            # The URL might already be authed from a previous attempt
+            # Try stripping the user@ part if it fails
+            return f"Clone failed: {result.stderr.strip()[:200]}"
+        return "Repository cloned"
+    except subprocess.TimeoutExpired:
+        return "Clone failed: timed out after 120 seconds"
+    except Exception as e:
+        return f"Clone failed: {str(e)[:200]}"
 
 
 def analyze_repo(path):

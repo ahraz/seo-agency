@@ -89,13 +89,15 @@ with st.sidebar:
             dest = os.path.join("/tmp", "seo-clones", repo_name)
             with st.spinner(f"Cloning {repo_name}..."):
                 msg = clone_repo(repo_url, dest)
-                if "already exists" in msg:
-                    st.info("Repo already cloned.")
-                else:
-                    st.success("Cloned!")
-            info = analyze_repo(dest)
-            st.session_state.cloned_repo_path = dest
-            st.session_state.cloned_repo_info = info
+            if "already exists" in msg:
+                st.info("Repo already cloned.")
+            elif msg.startswith("Clone failed"):
+                st.error(msg)
+            else:
+                st.success("Cloned!")
+                info = analyze_repo(dest)
+                st.session_state.cloned_repo_path = dest
+                st.session_state.cloned_repo_info = info
         else:
             st.warning("Enter a repo URL first.")
 
