@@ -211,6 +211,8 @@ if "cloned_repo_path" not in st.session_state:
     st.session_state.cloned_repo_path = None
 if "cloned_repo_info" not in st.session_state:
     st.session_state.cloned_repo_info = None
+if "quick_check_result" not in st.session_state:
+    st.session_state.quick_check_result = None
 
 
 # ─── Sidebar ─────────────────────────────────────────────────────────────────
@@ -249,6 +251,7 @@ def render_sidebar():
     if clear_clicked:
         st.session_state.cloned_repo_path = None
         st.session_state.cloned_repo_info = None
+        st.session_state.sidebar_repo_url = ""
         st.rerun()
 
     if clone_clicked and repo_url:
@@ -573,17 +576,21 @@ def render_dashboard():
 
     # Quick URL check widget on dashboard
     st.markdown("### Quick SEO Check")
-    check_url = st.text_input("Enter a URL to check", placeholder="https://example.com", label_visibility="collapsed")
+    check_url = st.text_input("Enter a URL to check", placeholder="https://example.com", label_visibility="collapsed", key="dash_quick_url")
     if check_url:
-        if not check_url.startswith("http"):
-            check_url = "https://" + check_url
         if st.button("Check URL", key="db_check"):
+            if not check_url.startswith("http"):
+                check_url = "https://" + check_url
             with st.spinner(f"Analyzing {check_url}..."):
                 data = audit_live_url(check_url)
-            if "error" in data:
-                st.error(f"Error: {data['error']}")
-            else:
-                _render_audit_results_compact(data)
+            st.session_state.quick_check_result = data
+
+    if st.session_state.quick_check_result:
+        data = st.session_state.quick_check_result
+        if "error" in data:
+            st.error(f"Error: {data['error']}")
+        else:
+            _render_audit_results_compact(data)
 
     # Recent activity
     st.markdown('<hr class="sep">', unsafe_allow_html=True)
@@ -679,7 +686,6 @@ def render_campaign():
     if st.button("▶️ Run Campaign", type="primary", use_container_width=True):
         progress_bar = st.progress(0, text="Initializing agents...")
         status_text = st.empty()
-        log_placeholder = st.empty()
 
         buf = io.StringIO()
         stages = [
@@ -695,7 +701,6 @@ def render_campaign():
             for i, stage in enumerate(stages):
                 progress_bar.progress((i + 1) / len(stages), text=stage)
                 status_text.markdown(f"**{stage}**")
-                time.sleep(0.3)
 
             with redirect_stdout(buf), redirect_stderr(buf):
                 from workflows.seo_campaign import run_full_campaign
@@ -757,16 +762,20 @@ def render_seo_audit():
     else:
         # Show cloned repo shortcut
         cloned_path = st.session_state.cloned_repo_path
-        default_path = cloned_path if cloned_path else ""
+        cloned_info = st.session_state.cloned_repo_info
 
-        if cloned_path:
-            st.info(f"📦 Cloned repo available: **{st.session_state.cloned_repo_info['name']}** — click Scan to audit it")
+        if cloned_path and cloned_info:
+            st.info(f"📦 Cloned repo: **{cloned_info['name']}** ({cloned_info['files']} files, {cloned_info['framework']})")
+
+        # Use a key based on cloned path so widget remounts when repo changes
+        widget_key = f"folder_path_{cloned_path.replace('/', '_')}" if cloned_path else "folder_path_empty"
 
         path = st.text_input(
             "Folder Path",
-            value=default_path,
+            value=cloned_path if cloned_path else "",
             placeholder="/path/to/website",
             label_visibility="collapsed",
+            key=widget_key,
         )
         if st.button("▶️ Scan Folder", type="primary", use_container_width=True):
             if not path or not os.path.exists(path):
@@ -778,9 +787,6 @@ def render_seo_audit():
 
                 st.session_state.audit_results = {"local_findings": findings, "mode": "local"}
                 _render_local_audit(findings, path)
-
-    if st.session_state.get("audit_results") and not st.session_state.audit_results.get("mode") == "local":
-        pass  # keeps the results visible
 
 
 def _render_audit_results(data):
