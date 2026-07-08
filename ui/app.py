@@ -218,7 +218,10 @@ def _run_blog(path, topic):
 running = _is_running()
 
 if not running:
-    if st.session_state._action:  # just finished
+    if st.session_state._action:  # just finished — capture results before clearing
+        log_content = _read_log()
+        if log_content:
+            st.session_state.results = log_content
         _stop_action()
         st.rerun()
 
