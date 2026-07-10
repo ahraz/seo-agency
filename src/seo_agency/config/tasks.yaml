@@ -1,0 +1,25 @@
+audit_task:
+  description: >
+    Scan the repository at {repo_path} for technical SEO issues.
+    Check for: missing meta descriptions, missing title tags,
+    missing alt text on images, missing JSON-LD schema,
+    missing sitemap.xml or robots.txt.
+    Report every issue found.
+  expected_output: "A numbered list of SEO issues found in the repo."
+  agent: technical_seo
+
+fix_task:
+  description: >
+    Read the audit results and fix all SEO issues found.
+    Edit files directly in the repository.
+    Report exactly which files were changed and what was added.
+  expected_output: "Summary of all changes made to fix SEO issues."
+  agent: seo_developer
+
+qa_task:
+  description: >
+    Verify the fixes made by the developer.
+    Check that the site still builds, no files are broken,
+    and the SEO improvements are correctly implemented.
+  expected_output: "QA pass/fail report with details."
+  agent: qa_engineer
