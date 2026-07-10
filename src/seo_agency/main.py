@@ -27,12 +27,15 @@ def run():
     This is the entry point that CrewAI Enterprise calls when you
     trigger a run from the web dashboard.
 
+    On CrewAI Enterprise the repo is already cloned and the working directory
+    IS the repo root, so REPO_PATH defaults to '.' (current directory).
+
     Inputs are read from environment variables so you can configure
     them in the CrewAI Enterprise dashboard under Environment Variables:
 
-        REPO_PATH  — path to the cloned repo (default: clients/gta-scrub/repo)
+        REPO_PATH  — path to the repo (default: '.' — the CWD on the platform)
     """
-    repo_path = os.getenv("REPO_PATH", "clients/gta-scrub/repo")
+    repo_path = os.getenv("REPO_PATH", ".")
     crew = SeoAgencyCrew(repo_path=repo_path).crew()
     result = crew.kickoff(inputs={"repo_path": repo_path})
     return result
