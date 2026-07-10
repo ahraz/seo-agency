@@ -1,0 +1,17 @@
+[project]
+name = "seo-agency"
+version = "1.0.0"
+description = "Multi-agent SEO automation platform powered by CrewAI"
+requires-python = ">=3.10"
+dependencies = [
+    "crewai>=0.30.0",
+    "python-dotenv>=1.0.0",
+    "PyGithub>=2.0.0",
+    "requests>=2.31.0",
+    "streamlit>=1.28.0",
+    "plotly>=5.18.0",
+    "pandas>=2.0.0",
+]
+
+[tool.crewai]
+crew = "src.seo_agency.main"
